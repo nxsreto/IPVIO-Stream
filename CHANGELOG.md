@@ -5,6 +5,7 @@
 - Default colour theme: Orange (index 7) instead of IPVIO green
 - In-app update address points to this fork's releases
 - New workflow `.github/workflows/release.yml`: publishes the debug APK as `TKTV.apk` on every push to main
+- Updates without reinstalling: the publish workflow signs every build with the same key (kept in the GitHub Actions cache, not in the repository) and gives it the version `1.3.<run number>` with its own release tag, so the in-app update offers it. New workflow `keep-signing-key.yml` keeps that cache entry alive
 - Phone search page (`/r`): new look, language filter chips (new API call `langs`, optional `lang` parameter on `search`), the same channel in several versions is shown once with its versions to choose from (new field `lg` in the `search` answer), connection indicator, the tab with hits opens by itself
 
 ## 1.3

@@ -1,9 +1,14 @@
 name: Publish APK
 
 # Personal fork: builds the debug APK and publishes it as a GitHub release, so the TV can
-# download it with a fixed address (releases/latest/download/TKTV.apk).
-# Note: debug builds are signed with a key created on the build machine. A newer APK therefore
-# does not install over an older one; uninstall the old app first (settings are lost).
+# download it with a fixed address (releases/latest/download/TKTV.apk) and the in-app update finds it.
+#
+# Signing: every build is signed with the same key, so a newer APK installs over the old one and keeps
+# playlists and settings. The key is created on the first run and kept in the GitHub Actions cache,
+# never in the repository. If that cache entry is ever lost, the next build gets a new key and has to
+# be installed once by hand after uninstalling the old app. keep-signing-key.yml keeps the entry alive.
+#
+# Version: 1.3.<run number>, release tag v1.3.<run number>.
 
 on:
   push:
@@ -15,7 +20,7 @@ permissions:
 
 concurrency:
   group: publish-apk
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -27,18 +32,42 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
+      - name: Signing key from the cache
+        uses: actions/cache@v4
+        with:
+          path: .signing
+          key: tktv-signing-key-v1
+      - name: Create the signing key on the first run
+        run: |
+          mkdir -p .signing
+          if [ ! -f .signing/tktv.keystore ] || [ ! -f .signing/pass ]; then
+            rm -f .signing/tktv.keystore .signing/pass
+            PASS="$(openssl rand -hex 16)"
+            printf '%s' "$PASS" > .signing/pass
+            keytool -genkeypair -keystore .signing/tktv.keystore -storetype PKCS12 \
+              -storepass "$PASS" -keypass "$PASS" -alias tktv -keyalg RSA -keysize 2048 \
+              -validity 10000 -dname "CN=TK TV personal build"
+            echo "New signing key created."
+          else
+            echo "Signing key restored from the cache."
+          fi
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
       - name: Build debug APK
-        run: ./gradlew --no-daemon assembleDebug
+        env:
+          TK_BUILD: ${{ github.run_number }}
+          TK_KEYSTORE: ${{ github.workspace }}/.signing/tktv.keystore
+        run: |
+          export TK_KEYSTORE_PASS="$(cat .signing/pass)"
+          ./gradlew --no-daemon assembleDebug
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp "$(ls app/build/outputs/apk/debug/*.apk | head -n 1)" TKTV.apk
           gh release delete perso-latest --cleanup-tag --yes || true
-          gh release create perso-latest TKTV.apk \
+          gh release create "v1.3.${GITHUB_RUN_NUMBER}" TKTV.apk \
             --target "$GITHUB_SHA" \
-            --title "TK TV (build ${GITHUB_RUN_NUMBER})" \
-            --notes "Personal build of this fork. Install on Fire TV with the Downloader app." \
+            --title "TK TV 1.3.${GITHUB_RUN_NUMBER}" \
+            --notes "Personal build of this fork." \
             --latest
