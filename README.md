@@ -1,3 +1,11 @@
+# Badr TV (personal fork of IPVIO Stream)
+
+> **This is an unofficial personal fork of [IPVIO Stream by Emrodev](https://github.com/Emrodev/IPVIO-Stream)**, licensed under GPL-3.0 like the original. It is not affiliated with the upstream project. Changes: app name, default colour theme, update address, release workflow. All credit for the app goes to the upstream authors.
+>
+> Fire TV install with the Downloader app: `https://github.com/nxsreto/ipvio-stream/releases/latest/download/BadrTV.apk`
+
+The upstream README follows.
+
 # IPVIO Stream
 
 DOWNLOADER CODE: 4200542
