@@ -121,6 +121,41 @@ object RemoteHub {
                     ",\"l\":" + RemoteLogic.arr(l.take(LIMIT).map(::liveJson)) +
                     ",\"lg\":" + RemoteLogic.arr(groups.take(LIMIT).map(::groupJson)) + "}"
             }
+            // Phone app: categories of the movies or series ("k=m" / "k=s"), with the language filter
+            "vcats" -> {
+                val kind = if (q["k"] == "s") Kind.SERIES else Kind.MOVIE
+                val want = RemoteLogic.langSet(q["lang"])
+                val g = all.asSequence().filter { it.kind == kind && (want.isEmpty() || it.lang in want) }.groupingBy { it.group }.eachCount()
+                RemoteLogic.arr(g.entries.sortedBy { it.key.lowercase() }.take(CAT_LIMIT).map { RemoteLogic.cat(it.key, it.value) })
+            }
+            // Phone app: one page of the poster grid ("g" = category, empty = all; "o" = offset)
+            "vlist" -> {
+                if (all.isEmpty()) return "{\"loading\":true}"
+                val kind = if (q["k"] == "s") Kind.SERIES else Kind.MOVIE
+                val want = RemoteLogic.langSet(q["lang"])
+                val g = q["g"].orEmpty()
+                val off = (q["o"]?.toIntOrNull() ?: 0).coerceAtLeast(0)
+                val hit = all.filter { it.kind == kind && (want.isEmpty() || it.lang in want) && (g.isEmpty() || it.group == g) }
+                // The same movie in several versions only once, as in the search on the TV
+                val uniq = if (kind == Kind.MOVIE) PlaylistLogic.firstPerKey(hit) { it.mk + "|" + it.lang } else hit
+                RemoteLogic.vodPage(uniq.size, off, uniq.drop(off).take(LIMIT).map { RemoteLogic.vod(it.id, it.title, it.year, qualityOf(it), it.group, it.logo) })
+            }
+            // Phone app: details of one title (description, rating, genres) if the metadata is available
+            "info" -> {
+                val i = all.firstOrNull { it.id == q["id"] } ?: return null
+                val ctx = appCtx
+                val m = MetaRepo.cached(i)
+                    ?: if (ctx != null && i.kind != Kind.LIVE) runCatching { kotlinx.coroutines.runBlocking { MetaRepo.basic(ctx, i) } }.getOrNull() else null
+                RemoteLogic.info(
+                    i.title,
+                    m?.year ?: i.year?.toString().orEmpty(),
+                    m?.runtime ?: 0,
+                    m?.genres.orEmpty(),
+                    m?.overview.orEmpty(),
+                    m?.score()?.let { String.format(java.util.Locale.US, "%.1f", it) }.orEmpty(),
+                    m?.poster ?: i.logo.orEmpty()
+                )
+            }
             // Languages of the loaded playlist for the filter chips, most titles first, "no tag" last
             "langs" -> {
                 val counts = all.groupingBy { it.lang }.eachCount()
@@ -245,6 +280,7 @@ object RemoteHub {
     private const val LIMIT = 60
     private const val VARIANT_LIMIT = 12
     private const val LANG_LIMIT = 8
+    private const val CAT_LIMIT = 300
     private const val CHANNEL_LIMIT = 800
     private const val EPISODE_LIMIT = 5000
 }
