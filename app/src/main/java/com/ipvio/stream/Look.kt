@@ -23,8 +23,8 @@ object Look {
     const val BRAND_GREEN = 0x4ADE80
     const val BRAND_GREEN_HI = 0x86EFAC
     const val BRAND_NAVY = 0x0B0F19
-    /** Default: IPVIO green on navy (round 13e: the design colors were removed again). */
-    const val DEFAULT_ACCENT = 0
+    /** Default of this personal fork: the "Orange" theme (index 7) on navy. Upstream default is 0 (IPVIO green). */
+    const val DEFAULT_ACCENT = 7
     const val DEFAULT_BG = 0
 
     val ACCENTS = listOf(

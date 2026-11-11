@@ -61,7 +61,8 @@ android {
         // is not overwritten. Both apps can be installed side by side (own data, own name).
         debug {
             applicationIdSuffix = ".test"
-            manifestPlaceholders["appLabel"] = "IPVIO Stream"
+            // Personal fork: name under the icon on the TV
+            manifestPlaceholders["appLabel"] = "TK TV"
         }
         release {
             if (hasKeystore) signingConfig = signingConfigs.getByName("release")

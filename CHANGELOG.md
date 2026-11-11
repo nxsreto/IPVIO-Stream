@@ -1,5 +1,11 @@
 # Changelog
 
+## Personal fork (nxsreto)
+- App name under the icon and on the add-playlist screen: TK TV
+- Default colour theme: Orange (index 7) instead of IPVIO green
+- In-app update address points to this fork's releases
+- New workflow `.github/workflows/release.yml`: publishes the debug APK as `TKTV.apk` on every push to main
+
 ## 1.3
 [PENDING: Änderung eintragen]
 
