@@ -5,6 +5,9 @@
 - Default colour theme: Orange (index 7) instead of IPVIO green
 - In-app update address points to this fork's releases
 - New workflow `.github/workflows/release.yml`: publishes the debug APK as `TKTV.apk` on every push to main
+- Phone app always available: its server starts with the app (before: only after opening the QR card) and keeps the same access code across restarts (stored in the private settings `tk_phone`), so a link kept on the phone's home screen stays valid. Trade-off: anyone on the same Wi-Fi who has that link can control playback
+- Phone app: `play` and the new call `wake` bring the app to the front and try to wake the screen (best effort)
+- Search index: the id map is built on first use, which saves memory for the phone search on very large playlists
 - Phone page (`/r`) becomes a small app: bottom navigation (home, live, movies, series, search), home with continue watching, poster rows and favorite channels, movies and series as poster grids with category and language filters, a page per title with "play on the TV", compact player bar that opens the full remote. New API calls `vcats`, `vlist`, `info` (additive)
 - Fix: on the first start (add-playlist screen) the phone page now offers the transfer page, so a backup can be restored there; before, the link was missing and `/transfer` answered 404
 - Updates without reinstalling: the publish workflow signs every build with the same key (kept in the GitHub Actions cache, not in the repository) and gives it the version `1.3.<run number>` with its own release tag, so the in-app update offers it. New workflow `keep-signing-key.yml` keeps that cache entry alive

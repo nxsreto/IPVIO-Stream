@@ -55,6 +55,8 @@ class MainActivity : ComponentActivity() {
         val app = applicationContext
         Thread({ runCatching { Updater.apply(app) } }, "updater-apply").start()
         CrashLog.install(this)
+        // Personal fork: the phone app is reachable as soon as the app runs, without opening the QR card first
+        runCatching { RemoteHub.start(app) }
         Coil.setImageLoader(
             ImageLoader.Builder(this)
                 .memoryCache { MemoryCache.Builder(this).maxSizePercent(Mem.imageCachePercent(Mem.tier(this))).build() }
