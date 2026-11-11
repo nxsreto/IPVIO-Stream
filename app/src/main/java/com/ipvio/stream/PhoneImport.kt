@@ -165,11 +165,12 @@ button{width:100%;padding:14px;margin-top:10px;border:0;border-radius:10px;backg
  * for transfer to another device) and read the last crash report ([crash]). What is not set
  * does not appear on the page.
  */
-class PhoneImport(private val onReceive: (PhoneInput) -> Unit) {
+class PhoneImport(fixedCode: String? = null, private val onReceive: (PhoneInput) -> Unit) {
     @Volatile private var server: ServerSocket? = null
     private val fails = java.util.concurrent.atomic.AtomicInteger(0)
     @Volatile private var lockedAt = 0L
-    val code: String = PhoneImportLogic.newCode(SecureRandom())
+    /** Access code: a new one for every server; the phone app passes its saved one so a link kept on the phone stays valid. */
+    val code: String = fixedCode?.takeIf { it.length == 4 && it.all(Char::isDigit) } ?: PhoneImportLogic.newCode(SecureRandom())
     @Volatile var port: Int = 0
         private set
 

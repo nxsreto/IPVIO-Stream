@@ -43,7 +43,7 @@ object RemoteHub {
     fun start(ctx: Context): PhoneImport? {
         appCtx = ctx.applicationContext
         server?.let { if (active) return it }
-        val s = PhoneImport { }
+        val s = PhoneImport(fixedCode(ctx)) { }
         s.onList = { name, bytes -> main.post { appCtx?.let { ListImportApply.run(it, name, bytes) } } }
         s.api = { name, q ->
             // The phone opened the page or used it: close the QR card on the TV (it would otherwise stay in front of the player).
@@ -55,6 +55,40 @@ object RemoteHub {
         server = s
         active = true
         return s
+    }
+
+    /**
+     * Personal fork: the access code of the phone app stays the same across restarts, so the link saved on the phone
+     * (home screen icon) keeps working. It is created once on this device and kept in the app's private settings.
+     */
+    private fun fixedCode(ctx: Context): String {
+        val p = ctx.applicationContext.getSharedPreferences("tk_phone", Context.MODE_PRIVATE)
+        p.getString("code", null)?.takeIf { it.length == 4 && it.all(Char::isDigit) }?.let { return it }
+        val c = PhoneImportLogic.newCode(java.security.SecureRandom())
+        p.edit().putString("code", c).apply()
+        return c
+    }
+
+    /**
+     * Personal fork: bring the app to the front and try to wake the screen when the phone starts something while the
+     * TV shows another app or sleeps. Best effort: the system may refuse, and nothing happens if the app was closed.
+     */
+    private fun wake() {
+        val c = appCtx ?: return
+        main.post {
+            runCatching {
+                val pm = c.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+                pm?.newWakeLock(android.os.PowerManager.SCREEN_BRIGHT_WAKE_LOCK or android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP, "tktv:wake")?.acquire(3000L)
+            }
+            runCatching {
+                c.startActivity(
+                    android.content.Intent(c, MainActivity::class.java).addFlags(
+                        android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+                            android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    )
+                )
+            }
+        }
     }
 
     fun stop() {
@@ -107,7 +141,9 @@ object RemoteHub {
         return when (name) {
             "search" -> {
                 if (all.isEmpty()) return "{\"loading\":true}"
+                Trail.mark("phone search, " + all.size + " titles")
                 val (m0, s0, l0) = SearchCache.build(all).find(q["q"].orEmpty().take(80))
+                Trail.mark("phone search: " + (m0.size + s0.size + l0.size) + " hits")
                 // Language filter of the phone page ("lang=fr,en"); empty = all languages
                 val want = RemoteLogic.langSet(q["lang"])
                 val m = if (want.isEmpty()) m0 else m0.filter { it.lang in want }
@@ -231,9 +267,12 @@ object RemoteHub {
             "play" -> {
                 val id = q["id"] ?: return null
                 if (all.none { it.id == id }) return null
+                wake()
                 playReq = Play(id, q["s"]?.toIntOrNull() ?: 0, q["e"]?.toIntOrNull() ?: 0)
                 "{\"ok\":true}"
             }
+            // Phone app: show the app on the TV again (see [wake])
+            "wake" -> { wake(); "{\"ok\":true}" }
             "ctl" -> control(q["c"].orEmpty(), q["v"].orEmpty())
             "state" -> onMain(RemoteLogic.state(false, "", false, 0, 0, false)) {
                 val p = player

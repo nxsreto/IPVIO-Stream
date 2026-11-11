@@ -3,7 +3,8 @@ package com.ipvio.stream
 /** Search index: title lowercased once and without accents/special characters so "Amelie" also finds "Amélie". */
 class SearchIndex(val all: List<Item>) {
     val keys: Array<String> = Array(all.size) { norm(all[it].title) }
-    val byId: Map<String, Item> = all.associateBy { it.id }
+    // Built on first use: the phone search does not need it, and with a very large playlist it costs a lot of memory
+    val byId: Map<String, Item> by lazy { all.associateBy { it.id } }
 
     fun find(q: String): Triple<List<Item>, List<Item>, List<Item>> {
         val n = norm(q)

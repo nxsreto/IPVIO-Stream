@@ -55,6 +55,10 @@ class MainActivity : ComponentActivity() {
         val app = applicationContext
         Thread({ runCatching { Updater.apply(app) } }, "updater-apply").start()
         CrashLog.install(this)
+        // Personal fork: flight recorder for stops without a crash report (see Trail)
+        Trail.init(app)
+        // Personal fork: the phone app is reachable as soon as the app runs, without opening the QR card first
+        runCatching { RemoteHub.start(app) }
         Coil.setImageLoader(
             ImageLoader.Builder(this)
                 .memoryCache { MemoryCache.Builder(this).maxSizePercent(Mem.imageCachePercent(Mem.tier(this))).build() }
@@ -108,6 +112,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
+        Trail.mark("trim memory level $level")
         @Suppress("DEPRECATION")
         val low = TRIM_MEMORY_RUNNING_LOW
         if (level >= low) Mem.trim(this)
@@ -116,6 +121,7 @@ class MainActivity : ComponentActivity() {
     @Suppress("OVERRIDE_DEPRECATION")
     override fun onLowMemory() {
         super.onLowMemory()
+        Trail.mark("LOW MEMORY callback")
         Mem.trim(this)
     }
 }

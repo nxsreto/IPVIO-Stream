@@ -139,13 +139,13 @@ object RemoteLogic {
         val lang = I18nCore.CODES.getOrElse(li) { "en" }
         fun t(de: String, en: String, fr: String? = null) = if (fr != null && lang == "fr") fr else tr(li, de, en)
         return """<!doctype html><html lang="$lang"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b1220">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b0d1a"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="TK TV"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>TK TV</title>
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#0b0d1a;color:#f6f3ee;font:16px/1.35 system-ui,-apple-system,sans-serif;padding-bottom:calc(170px + env(safe-area-inset-bottom))}
 button{font:inherit;color:inherit}
-header{position:sticky;top:0;background:#0b0d1a;padding:14px 16px 8px;z-index:5}
+header{position:sticky;top:0;background:#0b0d1a;padding:calc(14px + env(safe-area-inset-top)) 16px 8px;z-index:5}
 #top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 #top b{font-size:21px;font-weight:800;letter-spacing:-.3px}
 #conn{display:flex;align-items:center;gap:7px;font-size:13px;color:#b7b4c4}
@@ -256,7 +256,7 @@ var L2={all:'${js(t("Alle", "All", "Toutes"))}',untagged:'${js(t("Ohne Kennung",
 link:'${js(t("Link", "Link", "Lien"))}',playtv:'${js(t("Auf dem Fernseher starten", "Play on the TV", "Lancer sur la télé"))}',fav:'${js(t("Favorit", "Favorite", "Favori"))}',
 on:'${js(t("Mit dem Fernseher verbunden", "Connected to the TV", "Connecté à la télé"))}',off:'${js(t("Fernseher nicht erreichbar", "TV not reachable", "Télé injoignable"))}'};
 var TM='${js(t("Filme", "Movies"))}',TS='${js(t("Serien", "Series"))}';
-var L3={allc:'${js(t("Alle", "All", "Tous"))}',more:'${js(t("Mehr laden", "Load more", "Voir plus"))}',seeall:'${js(t("Alle ansehen", "See all", "Tout voir"))}',episodes:'${js(t("Folgen", "Episodes", "Épisodes"))}'};
+var L3={allc:'${js(t("Alle", "All", "Tous"))}',more:'${js(t("Mehr laden", "Load more", "Voir plus"))}',seeall:'${js(t("Alle ansehen", "See all", "Tout voir"))}',episodes:'${js(t("Folgen", "Episodes", "Épisodes"))}',wake:'${js(t("App auf dem Fernseher anzeigen", "Show the app on the TV", "Afficher TK TV sur la télé"))}',woke:'${js(t("An den Fernseher gesendet.", "Sent to the TV.", "Envoyé à la télé."))}'};
 var PLAY='<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z" fill="currentColor"/></svg>';
 var langs=[],langsLoaded=0;try{langs=JSON.parse(localStorage.getItem('tk_langs')||'[]')||[]}catch(e){langs=[]}
 var code='';try{code=new URLSearchParams(location.search).get('code')||sessionStorage.getItem('ipvio_code')||''}catch(e){}
@@ -380,7 +380,8 @@ function browse(){var k=view,me=++bseq;msg(L.load);
 function hrow(k,title,me,w){api('vlist',{k:k,g:'',lang:langs.join(','),o:0}).then(function(d){if(me!=bseq||!d.it||!d.it.length)return;
   var hd=el('div','sech'),all=el('button','lnk',L3.seeall),r=el('div','hrow');hd.appendChild(el('b',null,title));all.onclick=function(){nav(k)};hd.appendChild(all);w.appendChild(hd);
   d.it.slice(0,12).forEach(function(it){it.k=k;r.appendChild(pcard(it))});w.appendChild(r)}).catch(function(){})}
-function homeView(){var me=++bseq;list.innerHTML='';var w0=el('div'),w1=el('div'),w2=el('div'),w3=el('div');[w0,w1,w2,w3].forEach(function(w){list.appendChild(w)});
+function homeView(){var me=++bseq;list.innerHTML='';var w0=el('div'),w1=el('div'),w2=el('div'),w3=el('div'),w4=el('div');[w0,w1,w2,w3,w4].forEach(function(w){list.appendChild(w)});
+ w4.appendChild(el('div','sech',''));w4.appendChild(row(L3.wake,null,null,function(){api('wake').then(function(){toast(L3.woke)}).catch(function(e){if(e!==0)toast(L.err)})}));
  api('resume').then(function(a){if(me!=bseq||!a.length)return;var x=a[0],h=el('div','hero'),m=el('div','m');
   m.appendChild(el('small',null,L.cont));m.appendChild(el('b',null,x.t));
   if(x.k=='s'&&x.s)m.appendChild(el('span',null,L.season+' '+x.s+' · '+L.ep+' '+x.e));

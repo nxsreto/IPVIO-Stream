@@ -38,4 +38,27 @@ class PhoneAppTest {
         assertTrue(fr.contains("Accueil"))
         assertTrue(fr.contains("Tout voir"))
     }
+
+    @Test fun phone_app_keeps_its_access_code() {
+        assertEquals("4821", PhoneImport("4821") { }.code)
+        // Anything that is not four digits is ignored and a new code is made
+        for (bad in listOf("", "12", "12345", "12a4")) assertTrue(bad, PhoneImport(bad) { }.code.matches(Regex("[0-9]{4}")) && PhoneImport(bad) { }.code != bad)
+        assertTrue(PhoneImport { }.code.matches(Regex("[0-9]{4}")))
+    }
+
+    @Test fun page_can_be_kept_on_the_home_screen_and_wake_the_tv_app() {
+        val p = RemoteLogic.page(I18nCore.CODES.indexOf("fr"))
+        assertTrue(p.contains("apple-mobile-web-app-capable"))
+        assertTrue(p.contains("api('wake')"))
+        assertTrue(p.contains("Afficher TK TV sur la télé"))
+    }
+
+    @Test fun flight_recorder_names_the_system_reasons() {
+        assertTrue(Trail.reasonName(3).contains("LOW MEMORY"))
+        assertTrue(Trail.reasonName(4).contains("crash"))
+        assertTrue(Trail.reasonName(6).contains("ANR"))
+        assertEquals("reason 99", Trail.reasonName(99))
+        // Nothing recorded before the app has started
+        assertEquals("", Trail.prev)
+    }
 }
