@@ -293,7 +293,8 @@ class PhoneImport(private val onReceive: (PhoneInput) -> Unit) {
         val ins = s.getInputStream()
         val h = readHead(ins) ?: return
         val li = PhoneImportLogic.langIndex(h.lang)
-        val feats = PhoneImportLogic.Features(saveUpload != null, backup != null, crash != null, onEpg != null, onList != null)
+        // The transfer page also restores a backup, so it is offered as soon as one of the two is possible (first start: restore only)
+        val feats = PhoneImportLogic.Features(saveUpload != null, backup != null || restore != null, crash != null, onEpg != null, onList != null)
         val r: Reply = when (h.method + " " + h.path) {
             "GET /" -> html(200, PhoneImportLogic.page(li, feats))
             "POST /send" -> {
@@ -352,7 +353,7 @@ class PhoneImport(private val onReceive: (PhoneInput) -> Unit) {
                     else { onReceive(PhoneInput(url, "", "", "")); html(200, PhoneImportLogic.message(li, "ok")) }
                 }
             }
-            "GET /transfer" -> if (backup != null) html(200, PhoneImportLogic.transferPage(li)) else html(404, PhoneImportLogic.message(li, "bad"))
+            "GET /transfer" -> if (backup != null || restore != null) html(200, PhoneImportLogic.transferPage(li)) else html(404, PhoneImportLogic.message(li, "bad"))
             "GET /backup" -> {
                 val b = backup
                 val c = codeOk(h.query["code"])
