@@ -25,6 +25,14 @@ val keystore = Properties().apply {
 }
 val hasKeystore = listOf("storeFile", "storePassword", "keyAlias", "keyPassword").all { !keystore.getProperty(it).isNullOrBlank() }
 
+// Personal fork, set only by the publish workflow (.github/workflows/release.yml):
+// TK_BUILD = run number, so every published APK has a higher version ("1.3.<run>") and the in-app update finds it.
+// TK_KEYSTORE / TK_KEYSTORE_PASS = signing key that the workflow keeps outside the repository, so a new APK
+// installs over the old one. Local builds and the pull request build use neither.
+val tkBuild: Int? = System.getenv("TK_BUILD")?.toIntOrNull()
+val tkKeystoreFile: File? = System.getenv("TK_KEYSTORE")?.takeIf { it.isNotBlank() }?.let { rootProject.file(it) }?.takeIf { it.exists() }
+val tkKeystorePass: String = System.getenv("TK_KEYSTORE_PASS").orEmpty()
+
 android {
     namespace = "com.ipvio.stream"
     compileSdk {
@@ -36,8 +44,8 @@ android {
         minSdk = 24
         targetSdk = 37
         // Raise both for every release; the GitHub release tag must match versionName (e.g. tag "v1.1").
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = tkBuild?.let { 1000 + it } ?: 4
+        versionName = tkBuild?.let { "1.3.$it" } ?: "1.3"
         // Name under the icon; the debug build overrides it (see buildTypes)
         manifestPlaceholders["appLabel"] = "IPVIO Stream"
 
@@ -54,6 +62,15 @@ android {
             keyAlias = keystore.getProperty("keyAlias")
             keyPassword = keystore.getProperty("keyPassword")
         }
+        // Personal fork: fixed key of the published debug build (see the note at the top)
+        tkKeystoreFile?.let { ks ->
+            create("fork") {
+                storeFile = ks
+                storePassword = tkKeystorePass
+                keyAlias = "tktv"
+                keyPassword = tkKeystorePass
+            }
+        }
     }
 
     buildTypes {
@@ -63,6 +80,7 @@ android {
             applicationIdSuffix = ".test"
             // Personal fork: name under the icon on the TV
             manifestPlaceholders["appLabel"] = "TK TV"
+            if (tkKeystoreFile != null) signingConfig = signingConfigs.getByName("fork")
         }
         release {
             if (hasKeystore) signingConfig = signingConfigs.getByName("release")

@@ -1,0 +1,26 @@
+name: Keep signing key
+
+# GitHub deletes cache entries that nobody read for 7 days. This reads the signing key of the
+# publish workflow twice a week so it stays. It builds and publishes nothing.
+
+on:
+  schedule:
+    - cron: '17 4 * * 1,4'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  touch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read the signing key from the cache
+        id: key
+        uses: actions/cache/restore@v4
+        with:
+          path: .signing
+          key: tktv-signing-key-v1
+      - name: Report
+        run: |
+          if [ "${{ steps.key.outputs.cache-hit }}" = "true" ]; then echo "Signing key is still in the cache."; else echo "No signing key in the cache yet."; fi

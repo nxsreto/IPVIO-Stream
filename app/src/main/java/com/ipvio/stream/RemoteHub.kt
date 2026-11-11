@@ -81,16 +81,53 @@ object RemoteHub {
         return RemoteLogic.live(itemJson(i), Library.isFav(i.id), cur?.title, cur?.start ?: 0L, cur?.end ?: 0L)
     }
 
+    /** Channels of a search grouped by cleaned name and language: one entry per channel with all its versions. */
+    private fun groupLive(l: List<Item>): List<List<Pair<Item, RemoteLogic.ChanName>>> {
+        val by = LinkedHashMap<String, MutableList<Pair<Item, RemoteLogic.ChanName>>>()
+        for (i in l) {
+            val c = RemoteLogic.chanName(i.title)
+            by.getOrPut(c.key + "|" + i.lang) { ArrayList() }.add(i to c)
+        }
+        return by.values.toList()
+    }
+
+    private fun groupJson(g: List<Pair<Item, RemoteLogic.ChanName>>): String {
+        val first = g.first()
+        val cur = g.asSequence().mapNotNull { Epg.current(Xmltv.forChannel(it.first.tvgId)) }.firstOrNull()
+        val vs = g.map { (i, c) -> i to c.label.ifEmpty { qualityOf(i).orEmpty() } }
+            .sortedBy { RemoteLogic.qualityRank(it.second) }
+            .take(VARIANT_LIMIT)
+            .map { RemoteLogic.variant(it.first.id, it.second, Library.isFav(it.first.id)) }
+        val lang = if (first.first.lang == LangTagLogic.UNKNOWN) "" else first.first.lang
+        return RemoteLogic.liveGroup(first.second.name, lang, cur?.title, cur?.start ?: 0L, cur?.end ?: 0L, vs)
+    }
+
     private fun handle(name: String, q: Map<String, String>): String? {
         val all = PlaylistStore.channels
         return when (name) {
             "search" -> {
                 if (all.isEmpty()) return "{\"loading\":true}"
-                val (m, s, l) = SearchCache.build(all).find(q["q"].orEmpty().take(80))
-                "{\"nm\":${m.size},\"ns\":${s.size},\"nl\":${l.size}," +
+                val (m0, s0, l0) = SearchCache.build(all).find(q["q"].orEmpty().take(80))
+                // Language filter of the phone page ("lang=fr,en"); empty = all languages
+                val want = RemoteLogic.langSet(q["lang"])
+                val m = if (want.isEmpty()) m0 else m0.filter { it.lang in want }
+                val s = if (want.isEmpty()) s0 else s0.filter { it.lang in want }
+                val l = if (want.isEmpty()) l0 else l0.filter { it.lang in want }
+                // The same channel in several versions (HD, FHD, backup …) appears once, with its versions to choose from
+                val groups = groupLive(l)
+                "{\"nm\":${m.size},\"ns\":${s.size},\"nl\":${groups.size},\"nr\":${l.size}," +
                     "\"m\":" + RemoteLogic.arr(m.take(LIMIT).map(::itemJson)) +
                     ",\"s\":" + RemoteLogic.arr(s.take(LIMIT).map(::itemJson)) +
-                    ",\"l\":" + RemoteLogic.arr(l.take(LIMIT).map(::liveJson)) + "}"
+                    ",\"l\":" + RemoteLogic.arr(l.take(LIMIT).map(::liveJson)) +
+                    ",\"lg\":" + RemoteLogic.arr(groups.take(LIMIT).map(::groupJson)) + "}"
+            }
+            // Languages of the loaded playlist for the filter chips, most titles first, "no tag" last
+            "langs" -> {
+                val counts = all.groupingBy { it.lang }.eachCount()
+                RemoteLogic.arr(counts.entries
+                    .sortedWith(compareBy<Map.Entry<String, Int>>({ it.key == LangTagLogic.UNKNOWN }, { -it.value }))
+                    .take(LANG_LIMIT)
+                    .map { RemoteLogic.langEntry(it.key, if (it.key == LangTagLogic.UNKNOWN) "" else LangTagLogic.name(it.key), it.value) })
             }
             "resume" -> {
                 val byId = all.associateBy { it.id }
@@ -206,6 +243,8 @@ object RemoteHub {
     }
 
     private const val LIMIT = 60
+    private const val VARIANT_LIMIT = 12
+    private const val LANG_LIMIT = 8
     private const val CHANNEL_LIMIT = 800
     private const val EPISODE_LIMIT = 5000
 }
