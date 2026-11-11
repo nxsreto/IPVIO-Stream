@@ -5,6 +5,7 @@
 - Default colour theme: Orange (index 7) instead of IPVIO green
 - In-app update address points to this fork's releases
 - New workflow `.github/workflows/release.yml`: publishes the debug APK as `TKTV.apk` on every push to main
+- Diagnostics: flight recorder `Trail` for stops without a crash report. It writes the memory figures at the start, when the search builds its index, on every phone search and on the system's low-memory signals; Settings > Diagnostics shows the lines of the session before and, on Android 11 and later, the system's own reason for the last stops
 - Phone app always available: its server starts with the app (before: only after opening the QR card) and keeps the same access code across restarts (stored in the private settings `tk_phone`), so a link kept on the phone's home screen stays valid. Trade-off: anyone on the same Wi-Fi who has that link can control playback
 - Phone app: `play` and the new call `wake` bring the app to the front and try to wake the screen (best effort)
 - Search index: the id map is built on first use, which saves memory for the phone search on very large playlists

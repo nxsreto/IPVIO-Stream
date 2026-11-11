@@ -52,4 +52,13 @@ class PhoneAppTest {
         assertTrue(p.contains("api('wake')"))
         assertTrue(p.contains("Afficher TK TV sur la télé"))
     }
+
+    @Test fun flight_recorder_names_the_system_reasons() {
+        assertTrue(Trail.reasonName(3).contains("LOW MEMORY"))
+        assertTrue(Trail.reasonName(4).contains("crash"))
+        assertTrue(Trail.reasonName(6).contains("ANR"))
+        assertEquals("reason 99", Trail.reasonName(99))
+        // Nothing recorded before the app has started
+        assertEquals("", Trail.prev)
+    }
 }

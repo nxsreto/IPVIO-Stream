@@ -141,7 +141,9 @@ object RemoteHub {
         return when (name) {
             "search" -> {
                 if (all.isEmpty()) return "{\"loading\":true}"
+                Trail.mark("phone search, " + all.size + " titles")
                 val (m0, s0, l0) = SearchCache.build(all).find(q["q"].orEmpty().take(80))
+                Trail.mark("phone search: " + (m0.size + s0.size + l0.size) + " hits")
                 // Language filter of the phone page ("lang=fr,en"); empty = all languages
                 val want = RemoteLogic.langSet(q["lang"])
                 val m = if (want.isEmpty()) m0 else m0.filter { it.lang in want }

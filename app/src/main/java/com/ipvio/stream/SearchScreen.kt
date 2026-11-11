@@ -65,9 +65,16 @@ fun SearchScreen(
     val scope = rememberCoroutineScope()
     val all = PlaylistStore.channels
     // Build the index in the background; searches also run in the background and only after a short typing pause
-    val index by produceState(SearchCache.get(all), all) { value = withContext(Dispatchers.Default) { SearchCache.build(all) } }
+    val index by produceState(SearchCache.get(all), all) {
+        Trail.mark("TV search: building index, " + all.size + " titles")
+        value = withContext(Dispatchers.Default) { SearchCache.build(all) }
+        Trail.mark("TV search: index ready")
+    }
     val byId = index?.byId.orEmpty()
-    val suggestIdx by produceState<WordSuggest?>(null, all) { value = withContext(Dispatchers.Default) { SearchCache.suggest(all) } }
+    val suggestIdx by produceState<WordSuggest?>(null, all) {
+        value = withContext(Dispatchers.Default) { SearchCache.suggest(all) }
+        Trail.mark("TV search: word suggestions ready")
+    }
     val firstSugg = remember { FocusRequester() }
     val hist = History.ids.mapNotNull { byId[it] }
     // Smaller cards than elsewhere so more hits are visible next to the keyboard

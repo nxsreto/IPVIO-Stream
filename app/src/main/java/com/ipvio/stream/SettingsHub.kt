@@ -879,7 +879,10 @@ private fun DiagPage(ctx: Context, reload: () -> Unit) {
                     (if (it.second == "aus") Lang.tr("aus") else Lang.tr("an") + it.second.removePrefix("an"))
             },
         "Weiterschauen" to (ResumeLog.also { it.init(ctx) }.lines.take(12).joinToString("\n").ifBlank { "noch nichts gemerkt" }),
-        "Letzter Absturz" to (CrashLog.last(ctx)?.let { it.first + "  (" + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it.second)) + ")" } ?: "keiner")
+        "Letzter Absturz" to (CrashLog.last(ctx)?.let { it.first + "  (" + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it.second)) + ")" } ?: "keiner"),
+        // Personal fork: what the system says about the last stops, and the flight recorder of the session before (see Trail)
+        "Dernier arrêt (système)" to (Trail.systemExit(ctx) ?: "non indiqué par cette version d'Android"),
+        "Session précédente" to Trail.prev.ifBlank { "rien d'enregistré" }
     )
     lines.forEach { (k, v) ->
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
