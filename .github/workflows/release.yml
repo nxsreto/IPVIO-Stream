@@ -1,7 +1,7 @@
 name: Publish APK
 
 # Personal fork: builds the debug APK and publishes it as a GitHub release, so the TV can
-# download it with a fixed address (releases/latest/download/BadrTV.apk).
+# download it with a fixed address (releases/latest/download/TKTV.apk).
 # Note: debug builds are signed with a key created on the build machine. A newer APK therefore
 # does not install over an older one; uninstall the old app first (settings are lost).
 
@@ -35,10 +35,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp "$(ls app/build/outputs/apk/debug/*.apk | head -n 1)" BadrTV.apk
+          cp "$(ls app/build/outputs/apk/debug/*.apk | head -n 1)" TKTV.apk
           gh release delete perso-latest --cleanup-tag --yes || true
-          gh release create perso-latest BadrTV.apk \
+          gh release create perso-latest TKTV.apk \
             --target "$GITHUB_SHA" \
-            --title "Badr TV (build ${GITHUB_RUN_NUMBER})" \
+            --title "TK TV (build ${GITHUB_RUN_NUMBER})" \
             --notes "Personal build of this fork. Install on Fire TV with the Downloader app." \
             --latest

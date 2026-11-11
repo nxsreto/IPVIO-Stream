@@ -160,7 +160,7 @@ fun AddPlaylistScreen(onDone: () -> Unit) {
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 BrandMark(Modifier.size(36.dp))
-                Text("Badr TV", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
+                Text("TK TV", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
                 Text("Playlist hinzufügen", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 14.dp))
             }
             // Many new users ask which link to enter: say clearly that the app brings no content of its own

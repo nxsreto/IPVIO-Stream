@@ -62,7 +62,7 @@ android {
         debug {
             applicationIdSuffix = ".test"
             // Personal fork: name under the icon on the TV
-            manifestPlaceholders["appLabel"] = "Badr TV"
+            manifestPlaceholders["appLabel"] = "TK TV"
         }
         release {
             if (hasKeystore) signingConfig = signingConfigs.getByName("release")
