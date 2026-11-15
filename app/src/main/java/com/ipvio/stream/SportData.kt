@@ -384,22 +384,46 @@ object SportData {
     }
 
     /**
-     * Fetches the games of [l] on day [ymd] (at most every [maxAgeMs] per league and day). On an error the last state is kept.
+     * The scoreboard lists team games by its own calendar day (US Eastern for the US leagues), not by the viewer's.
+     * A viewer in Europe therefore needs two of those days for one of his: the NBA game at 23:00 on the 15th and the
+     * one at 01:00 on the 16th are both on the source's 15th. Returns the source days to ask for so that every game
+     * of the viewer's day [ymd] is found; [carryOver] (today only) also reaches back a few hours, for a game that
+     * started before midnight and is still running.
+     */
+    fun sourceDays(ymd: String, tz: TimeZone, carryOver: Boolean): List<String> {
+        val (s, e) = dayRange(ymd, tz)
+        val from = if (carryOver) s - CARRY_OVER_S else s
+        val out = LinkedHashSet<String>()
+        for (zone in SOURCE_ZONES) for (t in longArrayOf(from, s, e - 1)) out.add(ymd(0, zone, t * 1000))
+        return out.sorted()
+    }
+
+    /** Does [g] belong to the viewer's day [ymd]? Starts on that day, or (today only) is running right now. */
+    fun inView(g: Game, ymd: String, tz: TimeZone, today: Boolean): Boolean = onDay(g, ymd, tz) || (today && g.state == 1)
+
+    private const val CARRY_OVER_S = 6 * 3600L
+    private val SOURCE_ZONES = listOf(TimeZone.getTimeZone("America/New_York"), TimeZone.getTimeZone("UTC"))
+
+    /**
+     * Fetches the games of [l] on the viewer's day [ymd] (at most every [maxAgeMs] per league and source day). On an error
+     * the last state is kept. Team sports: the source days from [sourceDays] are loaded and filtered to the viewer's day.
      * Event sports (tennis, F1, UFC, golf, cricket) have no day parameter: their current events are filtered by day.
      */
     suspend fun fetch(l: League, ymd: String, maxAgeMs: Long = 40_000): List<Game> = withContext(Dispatchers.IO) {
-        val dayParam = l.kind == KIND_TEAM
-        val key = l.path + "|" + (if (dayParam) ymd else "now")
-        val all = load(l, key, if (dayParam) ymd else null, maxAgeMs)
-        if (dayParam) all else all.filter { onDay(it, ymd, General.zone()) }
+        val tz = General.zone()
+        if (l.kind != KIND_TEAM) return@withContext load(l, l.path + "|now", null, maxAgeMs).filter { onDay(it, ymd, tz) }
+        val today = ymd == SportData.ymd(0, tz)
+        sourceDays(ymd, tz, today).flatMap { d -> load(l, l.path + "|" + d, d, maxAgeMs) }.distinctBy { it.key }.filter { inView(it, ymd, tz, today) }
     }
 
     /** Last loaded games of [l] for [ymd] regardless of their age (null = never loaded): shown at once while fresh data loads. */
     fun peek(l: League, ymd: String): List<Game>? {
-        val dayParam = l.kind == KIND_TEAM
-        val key = l.path + "|" + (if (dayParam) ymd else "now")
-        val all = synchronized(cache) { cache[key] }?.second ?: return null
-        return if (dayParam) all else all.filter { onDay(it, ymd, General.zone()) }
+        val tz = General.zone()
+        if (l.kind != KIND_TEAM) return synchronized(cache) { cache[l.path + "|now"] }?.second?.filter { onDay(it, ymd, tz) }
+        val today = ymd == SportData.ymd(0, tz)
+        val parts = sourceDays(ymd, tz, today).mapNotNull { d -> synchronized(cache) { cache[l.path + "|" + d] }?.second }
+        if (parts.isEmpty()) return null
+        return parts.flatten().distinctBy { it.key }.filter { inView(it, ymd, tz, today) }
     }
 
     /** Current events of an event sport without day filter (fight card, tournament, race weekend). */
@@ -430,7 +454,12 @@ object SportData {
     }
 
     /** Was there ever an answer for this league and day? (Distinguishes "no games" from "not reachable".) */
-    fun hasData(l: League, ymd: String): Boolean = synchronized(cache) { cache.containsKey(l.path + "|" + (if (l.kind == KIND_TEAM) ymd else "now")) }
+    fun hasData(l: League, ymd: String): Boolean {
+        if (l.kind != KIND_TEAM) return synchronized(cache) { cache.containsKey(l.path + "|now") }
+        val tz = General.zone()
+        val days = sourceDays(ymd, tz, ymd == SportData.ymd(0, tz))
+        return synchronized(cache) { days.any { cache.containsKey(l.path + "|" + it) } }
+    }
 
     // ───────── Matching to your channels ─────────
 
