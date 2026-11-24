@@ -11,6 +11,9 @@ package com.ipvio.stream
 object LangTagLogic {
     const val UNKNOWN = "?"
 
+    /** Every known language except [keep]: the set to hide so that only [keep] (and entries without a tag) remain. */
+    fun allExcept(keep: Set<String>): Set<String> = CODES.values.toSet() - keep
+
     /** Abbreviation → language. Ambiguous abbreviations (IN, AL, NO, CA, SE, BE, MY) deliberately left out: "beIN Sports", "Al Jazeera" … */
     private val CODES = mapOf(
         "DE" to "de", "GER" to "de", "DEU" to "de", "AT" to "de", "CH" to "de",

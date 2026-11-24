@@ -61,4 +61,11 @@ class PhoneAppTest {
         // Nothing recorded before the app has started
         assertEquals("", Trail.prev)
     }
+
+    @Test fun first_load_keeps_only_the_chosen_languages() {
+        val hide = LangTagLogic.allExcept(setOf("fr", "en", "ar"))
+        for (kept in listOf("fr", "en", "ar", LangTagLogic.UNKNOWN)) assertFalse(kept, kept in hide)
+        for (hidden in listOf("de", "es", "pt", "tr")) assertTrue(hidden, hidden in hide)
+        assertTrue(LangTagLogic.allExcept(emptySet()).containsAll(hide))
+    }
 }

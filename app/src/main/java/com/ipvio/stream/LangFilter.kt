@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
  */
 object LangFilter {
     private const val PREFS = "ipvio_lang"
+    private val FIRST_LOAD_KEEP = setOf("fr", "en", "ar")
 
     /** Hidden languages (abbreviation from [LangTagLogic], "?" = no tag). */
     var hidden by mutableStateOf<Set<String>>(emptySet())
@@ -35,7 +36,11 @@ object LangFilter {
 
     fun init(c: Context) {
         val p = Profiles.sp(c, PREFS)
-        hidden = LangTagLogic.decode(p.getString("hidden", ""))
+        // Personal fork: before anything was chosen, only French, English and Arabic (and entries without a language
+        // tag) are loaded, so the very first load of a huge playlist does not bring every language into memory.
+        // Any choice made later under "content languages" replaces this, including "show all".
+        val untouched = !p.contains("hidden") && !p.contains("all")
+        hidden = if (untouched) LangTagLogic.allExcept(FIRST_LOAD_KEEP) else LangTagLogic.decode(p.getString("hidden", ""))
         allChosen = p.getBoolean("all", false)
         version++
     }
