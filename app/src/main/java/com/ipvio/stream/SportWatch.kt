@@ -57,12 +57,15 @@ object SportWatch {
     private val RACE = Regex("""formel\s?1|formula\s?1|\bf1\b|grand\s?prix""", RegexOption.IGNORE_CASE)
     private val GOLF = Regex("""\bgolf\b|\bpga\b""", RegexOption.IGNORE_CASE)
     private val UFC = Regex("""\bufc\b""", RegexOption.IGNORE_CASE)
+    private val PFL = Regex("""\bpfl\b|professional fighters""", RegexOption.IGNORE_CASE)
 
     /** Does a show text belong to this event? */
     fun showMatches(g: SportData.Game, text: String): Boolean = when (SportData.kindOf(g)) {
         SportData.KIND_RACE -> RACE.containsMatchIn(text)
         SportData.KIND_GOLF -> GOLF.containsMatchIn(text)
-        SportData.KIND_FIGHT -> UFC.containsMatchIn(text) || SportData.matches(g, text)
+        SportData.KIND_FIGHT -> (if (g.league == "PFL") PFL else UFC).containsMatchIn(text) || SportData.matches(g, text)
+        // Guides often translate one club name ("Etoile Rouge" for Crvena Zvezda): the competition plus one of the two clubs is enough
+        SportData.KIND_EURO -> SportData.euroShowMatches(g, text)
         else -> SportData.matches(g, text)
     }
 

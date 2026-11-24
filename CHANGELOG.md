@@ -5,6 +5,7 @@
 - Default colour theme: Orange (index 7) instead of IPVIO green
 - In-app update address points to this fork's releases
 - New workflow `.github/workflows/release.yml`: publishes the debug APK as `TKTV.apk` on every push to main
+- Sports: EuroLeague and EuroCup (basketball) from the competition's own public feed (`KIND_EURO`, `SportData.parseEuro`), PFL (MMA) from the scoreboard like UFC; the sport tile "UFC" is now "MMA". Guide matching: PFL shows, and EuroLeague shows that name the competition and one of the two clubs
 - TV first: the very first load of an Xtream login fetches only the channels, so the app opens after the short part of the download; movies and series are fetched right afterwards in the background (`XtreamApi.write(liveOnly)`, `PlaylistStore.followUp`). If the provider does not allow the shortcut, the usual full load runs. Until the full list has arrived once, the next start loads from the network
 - Languages from the first load: until a choice is made under content languages, only French, English and Arabic (plus entries without a language tag) are loaded. Existing installations keep their choice
 - Fix (sports): team games are read for the viewer's day instead of the scoreboard's own calendar day (US Eastern for the US leagues). Before, a viewer in Europe saw the next night's NBA games under today, and a game that started before midnight left the live list at midnight although it was still running. `SportData.sourceDays` picks the source days, `inView` filters them and keeps running games
