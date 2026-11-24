@@ -205,11 +205,23 @@ class XtreamApi(private val client: OkHttpClient, private val ua: String) {
      * the three downloads no longer wait for each other, which is the biggest part of the first setup. If the provider refuses
      * the parallel requests, the missing part is simply fetched again one after the other.
      */
-    fun write(a: XtreamLogic.Acct, out: Writer): Int {
+    fun write(a: XtreamLogic.Acct, out: Writer, liveOnly: Boolean = false): Int {
         onPhase("Zugang wird geprüft …")
         verify(a)
         var n = 0
         out.write(XtreamLogic.header(a)); out.write("\n")
+        if (liveOnly) {
+            // Personal fork, "TV first": only the channels, so the first start does not wait for the (much larger) movie and
+            // series lists. The caller fetches the whole list right afterwards in the background.
+            onPhase("Sender werden geladen …")
+            val cats = categories(a, "get_live_categories")
+            stream(XtreamLogic.api(a, "get_live_streams")) { f ->
+                XtreamLogic.liveEntry(a, f, cats)?.let { out.write(it); out.write("\n"); n++ }
+            }
+            check()
+            out.flush()
+            return n
+        }
 
         val vodFile = java.io.File.createTempFile("ipvio_vod", ".part")
         val serFile = java.io.File.createTempFile("ipvio_ser", ".part")
