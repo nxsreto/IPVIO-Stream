@@ -50,6 +50,8 @@ object SportData {
     const val KIND_FIGHT = 3
     const val KIND_GOLF = 4
     const val KIND_CRICKET = 5
+    /** Personal fork: EuroLeague and EuroCup from the competition's own public feed (the scoreboard has no European basketball). */
+    const val KIND_EURO = 6
 
     /** [sport] = key of [SPORTS]; [kind] decides how the scoreboard is read. */
     class League(val name: String, val path: String, val catName: String, val sport: String = "soccer", val kind: Int = KIND_TEAM)
@@ -59,7 +61,7 @@ object SportData {
 
     val SPORTS = listOf(
         Sport("soccer", "Fußball"), Sport("basketball", "Basketball"), Sport("nfl", "NFL"), Sport("nhl", "NHL"),
-        Sport("tennis", "Tennis"), Sport("f1", "Formel 1"), Sport("mlb", "MLB"), Sport("ufc", "UFC"),
+        Sport("tennis", "Tennis"), Sport("f1", "Formel 1"), Sport("mlb", "MLB"), Sport("ufc", "MMA"),
         Sport("cricket", "Cricket"), Sport("golf", "Golf")
     )
 
@@ -73,6 +75,8 @@ object SportData {
         League("Champions League", "soccer/uefa.champions", "Fußball"),
         League("Europa League", "soccer/uefa.europa", "Fußball"),
         League("NBA", "basketball/nba", "Basketball", "basketball"),
+        League("EuroLeague", "euroleague/E", "Basketball", "basketball", KIND_EURO),
+        League("EuroCup", "euroleague/U", "Basketball", "basketball", KIND_EURO),
         League("NFL", "football/nfl", "American Football", "nfl"),
         League("College Football", "football/college-football", "American Football", "nfl"),
         League("NHL", "hockey/nhl", "Eishockey", "nhl"),
@@ -81,6 +85,7 @@ object SportData {
         League("WTA", "tennis/wta", "Tennis", "tennis", KIND_TENNIS),
         League("Formel 1", "racing/f1", "Motorsport", "f1", KIND_RACE),
         League("UFC", "mma/ufc", "Kampfsport", "ufc", KIND_FIGHT),
+        League("PFL", "mma/pfl", "Kampfsport", "ufc", KIND_FIGHT),
         League("PGA Tour", "golf/pga", "Golf", "golf", KIND_GOLF),
         League("Cricket", "cricket", "Rugby & Cricket", "cricket", KIND_CRICKET)
     )
@@ -411,6 +416,11 @@ object SportData {
      */
     suspend fun fetch(l: League, ymd: String, maxAgeMs: Long = 40_000): List<Game> = withContext(Dispatchers.IO) {
         val tz = General.zone()
+        // EuroLeague: a late game that is still running stays in today's list after midnight, like the team sports
+        if (l.kind == KIND_EURO) {
+            val now = ymd == SportData.ymd(0, tz)
+            return@withContext load(l, l.path + "|now", null, maxAgeMs).filter { inView(it, ymd, tz, now) }
+        }
         if (l.kind != KIND_TEAM) return@withContext load(l, l.path + "|now", null, maxAgeMs).filter { onDay(it, ymd, tz) }
         val today = ymd == SportData.ymd(0, tz)
         sourceDays(ymd, tz, today).flatMap { d -> load(l, l.path + "|" + d, d, maxAgeMs) }.distinctBy { it.key }.filter { inView(it, ymd, tz, today) }
@@ -428,10 +438,157 @@ object SportData {
 
     /** Current events of an event sport without day filter (fight card, tournament, race weekend). */
     suspend fun fetchCurrent(l: League, maxAgeMs: Long = 40_000): List<Game> = withContext(Dispatchers.IO) {
-        if (l.kind == KIND_TEAM) emptyList() else load(l, l.path + "|now", null, maxAgeMs)
+        if (l.kind == KIND_TEAM) emptyList()
+        else if (l.kind == KIND_EURO) {
+            // The feed holds the whole season: "current" = the last days and the next two weeks
+            val nowS = System.currentTimeMillis() / 1000
+            load(l, l.path + "|now", null, maxAgeMs).filter { it.start in (nowS - 3 * 86_400)..(nowS + 14 * 86_400) }
+        } else load(l, l.path + "|now", null, maxAgeMs)
+    }
+
+    // ───────── EuroLeague / EuroCup: the competition's own public feed ─────────
+
+    private const val EURO_API = "https://api-live.euroleague.net/v2/competitions/"
+    private const val EURO_SEASON_AGE = 6 * 3_600_000L
+    private const val EURO_PAGE = 100
+    /** A game counts as running for this long after its start if the feed has not marked it as played yet. */
+    private const val EURO_RUN_S = 3 * 3600L
+
+    /** Competition code from the league path: "euroleague/E" → "E" (EuroLeague), "euroleague/U" → "U" (EuroCup). */
+    fun euroCode(l: League): String = l.path.substringAfter('/')
+
+    /** Season code of the feed, e.g. "E2026" for the season that starts in autumn 2026 (a season runs from September to May). */
+    fun euroSeason(code: String, nowMs: Long = System.currentTimeMillis()): String {
+        val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+        cal.timeInMillis = nowMs
+        val y = cal.get(Calendar.YEAR)
+        return code + (if (cal.get(Calendar.MONTH) >= Calendar.AUGUST) y else y - 1)
+    }
+
+    /** A game of the feed with its round number (needed to ask for fresh scores of that round). */
+    class EuroGame(val game: Game, val round: Int)
+
+    /**
+     * Reads the feed's answer {"data":[…],"total":n}. State: "played" → finished; from the start until three hours later →
+     * running; otherwise not started. Unknown or incomplete entries are skipped. Returns the games and the feed's total.
+     */
+    fun parseEuro(json: String, l: League, nowS: Long = System.currentTimeMillis() / 1000): Pair<List<EuroGame>, Int> {
+        val o = JSONObject(json)
+        val out = ArrayList<EuroGame>()
+        for (e in objs(o.optJSONArray("data"))) {
+            try {
+                val start = parseDate(e.optString("utcDate"))
+                if (start == 0L) continue
+                val state = if (e.optBoolean("played", false)) 2 else if (nowS >= start && nowS < start + EURO_RUN_S) 1 else 0
+                val hs = e.optJSONObject("local") ?: continue
+                val rs = e.optJSONObject("road") ?: continue
+                val hScore = hs.optInt("score", 0)
+                val rScore = rs.optInt("score", 0)
+                fun side(s: JSONObject, mine: Int, other: Int): Team? {
+                    val c = s.optJSONObject("club") ?: return null
+                    val name = c.optString("name")
+                    if (name.isBlank()) return null
+                    val short = c.optString("abbreviatedName").ifBlank { c.optString("editorialName") }.ifBlank { name }
+                    val logo = c.optJSONObject("images")?.optString("crest")?.takeIf { it.isNotBlank() }
+                    return Team(name, short, c.optString("code"), logo, if (state == 0) null else mine.toString(), state == 2 && mine > other, null, null, c.optString("code"))
+                }
+                val home = side(hs, hScore, rScore) ?: continue
+                val away = side(rs, rScore, hScore) ?: continue
+                val detail = when (state) { 1 -> "Live"; 2 -> "Final"; else -> "" }
+                out.add(EuroGame(
+                    Game(
+                        e.optString("identifier").ifBlank { e.optString("id") }, l.name, l.catName, start, state, detail, home, away,
+                        venue = e.optJSONObject("venue")?.optString("name").orEmpty(),
+                        note = e.optString("roundName").ifBlank { e.optString("roundAlias") }
+                    ),
+                    e.optInt("round", 0)
+                ))
+            } catch (_: Exception) { }
+        }
+        return out to o.optInt("total", out.size)
+    }
+
+    private fun euroText(url: String): String? = try {
+        val req = Request.Builder().url(url).header("User-Agent", "IPVIO-Stream").header("Accept", "application/json").build()
+        Net.withTimeouts(8, 15).newCall(req).execute().use { r -> if (r.isSuccessful) r.body?.string() else null }
+    } catch (_: Exception) { null }
+
+    private val euroSeasons = HashMap<String, Pair<Long, List<EuroGame>>>()
+    private val euroRounds = HashMap<String, Pair<Long, List<EuroGame>>>()
+
+    /**
+     * All games of the running season (asked for every few hours, in pages) with fresh scores for the rounds that are on
+     * right now (asked for every [maxAgeMs]). On an error the last known state is kept.
+     */
+    private fun loadEuro(l: League, maxAgeMs: Long): List<Game> {
+        val now = System.currentTimeMillis()
+        val key = l.path + "|now"
+        val hit = synchronized(cache) { cache[key] }
+        if (hit != null && now - hit.first < maxAgeMs) return hit.second
+        return try {
+            val code = euroCode(l)
+            val base = EURO_API + code + "/seasons/" + euroSeason(code, now) + "/games"
+            var season = synchronized(euroSeasons) { euroSeasons[l.path] }
+            if (season == null || now - season.first > EURO_SEASON_AGE) {
+                val all = ArrayList<EuroGame>()
+                var off = 0
+                var total = Int.MAX_VALUE
+                var complete = true
+                while (off < total && off < 2000) {
+                    val txt = euroText("$base?Limit=$EURO_PAGE&Offset=$off")
+                    if (txt == null) { complete = false; break }
+                    val (page, t) = parseEuro(txt, l, now / 1000)
+                    total = t
+                    all.addAll(page)
+                    if (page.isEmpty()) break
+                    off += EURO_PAGE
+                }
+                if (complete && all.isNotEmpty()) {
+                    val loaded = now to all.distinctBy { it.game.id }
+                    synchronized(euroSeasons) { euroSeasons[l.path] = loaded }
+                    season = loaded
+                }
+            }
+            val list = season?.second
+            if (list == null) { lastOk = false; return hit?.second ?: emptyList() }
+            // Fresh scores: the rounds with a game between four hours ago and half an hour from now
+            val nowS = now / 1000
+            val rounds = list.filter { it.round > 0 && it.game.start in (nowS - 4 * 3600)..(nowS + 1800) }.map { it.round }.distinct().take(3)
+            val fresh = HashMap<String, Game>()
+            for (r in rounds) {
+                val rk = l.path + "|r" + r
+                var rd = synchronized(euroRounds) { euroRounds[rk] }
+                if (rd == null || now - rd.first > maxAgeMs) {
+                    val txt = euroText("$base?roundNumber=$r&Limit=$EURO_PAGE")
+                    if (txt != null) {
+                        val loaded = now to parseEuro(txt, l, nowS).first
+                        synchronized(euroRounds) { if (euroRounds.size > 40) euroRounds.clear(); euroRounds[rk] = loaded }
+                        rd = loaded
+                    }
+                }
+                rd?.second?.forEach { fresh[it.game.id] = it.game }
+            }
+            // Games from the season list are re-read with the current time, so "running" does not depend on when the list was loaded
+            val games = list.map { eg ->
+                fresh[eg.game.id] ?: eg.game.let { g ->
+                    val st = if (g.state == 2) 2 else if (nowS >= g.start && nowS < g.start + EURO_RUN_S) 1 else 0
+                    if (st == g.state) g else Game(g.id, g.league, g.catName, g.start, st, if (st == 1) "Live" else "", g.home, g.away, venue = g.venue, note = g.note)
+                }
+            }
+            synchronized(cache) {
+                if (cache.size > 300) cache.clear()
+                cache[key] = now to games
+            }
+            lastOk = true
+            games
+        } catch (_: Exception) {
+            lastOk = false
+            hit?.second ?: emptyList()
+        }
     }
 
     private fun load(l: League, key: String, ymd: String?, maxAgeMs: Long): List<Game> {
+        if (l.kind == KIND_EURO) return loadEuro(l, maxAgeMs)
         val now = System.currentTimeMillis()
         val hit = synchronized(cache) { cache[key] }
         if (hit != null && now - hit.first < maxAgeMs) return hit.second
@@ -508,6 +665,18 @@ object SportData {
         val n = normCached(text)
         return keysCached(g.home).any { has(n, it) } && keysCached(g.away).any { has(n, it) }
     }
+
+    /** Does at least one of the two teams appear in the show text? (Only together with a second hint, see SportWatch.) */
+    fun matchesOne(g: Game, text: String): Boolean {
+        if (g.solo) return false
+        val n = normCached(text)
+        return keysCached(g.home).any { has(n, it) } || keysCached(g.away).any { has(n, it) }
+    }
+
+    private val RX_EURO = Regex("""euro\s?l(?:eague|igue|ega)|euro\s?c(?:up|oupe)""", RegexOption.IGNORE_CASE)
+
+    /** EuroLeague show in the guide: both clubs, or the competition's name plus one of them. */
+    fun euroShowMatches(g: Game, text: String): Boolean = matches(g, text) || (RX_EURO.containsMatchIn(text) && matchesOne(g, text))
 
     private val chanCache = HashMap<String, Pair<Int, List<Item>>>()
 
